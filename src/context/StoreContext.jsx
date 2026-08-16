@@ -1,93 +1,110 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { initialProducts, initialCategories, initialStoreSettings, initialOrders } from '../data/initialData';
+import { db } from '../firebase';
+import {
+  collection, doc, onSnapshot, setDoc, addDoc,
+  updateDoc, deleteDoc, query, orderBy
+} from 'firebase/firestore';
+import { initialCategories, initialStoreSettings } from '../data/initialData';
 
 const StoreContext = createContext();
 
 export const StoreProvider = ({ children }) => {
-  // Mode state: 'store' or 'admin' — always starts on 'store' for security
+  // Mode state
   const [viewMode, setViewMode] = useState('store');
 
-  // Admin Authentication state — session cleared on every page load
+  // Admin Auth
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
   const [showAdminLogin, setShowAdminLogin] = useState(false);
 
-  // Settings state
-  const [settings, setSettings] = useState(() => {
-    const saved = localStorage.getItem('cue_settings');
-    return saved ? JSON.parse(saved) : initialStoreSettings;
-  });
+  // Loading state (while Firestore first loads)
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Categories state
-  const [categories, setCategories] = useState(() => {
-    const saved = localStorage.getItem('cue_categories');
-    return saved ? JSON.parse(saved) : initialCategories;
-  });
+  // ── Firestore-synced state ──────────────────────────────────────────────
+  const [settings, setSettings] = useState(initialStoreSettings);
+  const [categories, setCategories] = useState(initialCategories);
+  const [products, setProducts] = useState([]);
+  const [orders, setOrders] = useState([]);
 
-  // Products state
-  const [products, setProducts] = useState(() => {
-    const saved = localStorage.getItem('cue_products');
-    return saved ? JSON.parse(saved) : initialProducts;
-  });
-
-  // Orders log state
-  const [orders, setOrders] = useState(() => {
-    const saved = localStorage.getItem('cue_orders');
-    return saved ? JSON.parse(saved) : initialOrders;
-  });
-
-  // Cart state: [{ cartItemId, product, size, color, quantity }]
+  // ── Device-local state (intentionally NOT synced — per device) ──────────
   const [cart, setCart] = useState(() => {
-    const saved = localStorage.getItem('cue_cart');
-    return saved ? JSON.parse(saved) : [];
+    try { return JSON.parse(localStorage.getItem('cue_cart') || '[]'); } catch { return []; }
   });
-
-  // Wishlist state: array of product IDs
   const [wishlist, setWishlist] = useState(() => {
-    const saved = localStorage.getItem('cue_wishlist');
-    return saved ? JSON.parse(saved) : [];
+    try { return JSON.parse(localStorage.getItem('cue_wishlist') || '[]'); } catch { return []; }
   });
 
-  // Filter & Search states
-  const [activeCategory, setActiveCategory] = useState("All");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [sortOption, setSortOption] = useState("featured");
+  // Filter & Search
+  const [activeCategory, setActiveCategory] = useState('All');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortOption, setSortOption] = useState('featured');
 
-  // UI Drawers & Modals
+  // UI drawers & modals
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isWishlistOpen, setIsWishlistOpen] = useState(false);
   const [selectedProductModal, setSelectedProductModal] = useState(null);
   const [toastMessage, setToastMessage] = useState(null);
 
-  // Persistence side effects
-  useEffect(() => {
-    localStorage.setItem('cue_view_mode', viewMode);
-  }, [viewMode]);
+  // ── Firestore real-time listeners ───────────────────────────────────────
 
+  // Store settings
   useEffect(() => {
-    localStorage.setItem('cue_settings', JSON.stringify(settings));
-  }, [settings]);
+    const unsub = onSnapshot(doc(db, 'config', 'settings'), (snap) => {
+      if (snap.exists()) {
+        setSettings(snap.data());
+      } else {
+        // Seed defaults on first run
+        setDoc(doc(db, 'config', 'settings'), initialStoreSettings).catch(console.error);
+      }
+    }, console.error);
+    return unsub;
+  }, []);
 
+  // Categories
   useEffect(() => {
-    localStorage.setItem('cue_categories', JSON.stringify(categories));
-  }, [categories]);
+    const unsub = onSnapshot(doc(db, 'config', 'categories'), (snap) => {
+      if (snap.exists()) {
+        setCategories(snap.data().list || initialCategories);
+      } else {
+        setDoc(doc(db, 'config', 'categories'), { list: initialCategories }).catch(console.error);
+      }
+    }, console.error);
+    return unsub;
+  }, []);
 
+  // Products — real-time listener (cross-device sync happens here)
   useEffect(() => {
-    localStorage.setItem('cue_products', JSON.stringify(products));
-  }, [products]);
+    const q = query(collection(db, 'products'), orderBy('createdAt', 'desc'));
+    const unsub = onSnapshot(q, (snap) => {
+      const prods = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setProducts(prods);
+      setIsLoading(false);
+    }, (err) => {
+      console.error('Products listener:', err);
+      setIsLoading(false);
+    });
+    return unsub;
+  }, []);
 
+  // Orders
   useEffect(() => {
-    localStorage.setItem('cue_orders', JSON.stringify(orders));
-  }, [orders]);
+    const q = query(collection(db, 'orders'), orderBy('date', 'desc'));
+    const unsub = onSnapshot(q, (snap) => {
+      setOrders(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, console.error);
+    return unsub;
+  }, []);
 
-  useEffect(() => {
-    localStorage.setItem('cue_cart', JSON.stringify(cart));
-  }, [cart]);
+  // Persist cart & wishlist locally (device-specific by design)
+  useEffect(() => { localStorage.setItem('cue_cart', JSON.stringify(cart)); }, [cart]);
+  useEffect(() => { localStorage.setItem('cue_wishlist', JSON.stringify(wishlist)); }, [wishlist]);
 
-  useEffect(() => {
-    localStorage.setItem('cue_wishlist', JSON.stringify(wishlist));
-  }, [wishlist]);
+  // ── Toast helper ────────────────────────────────────────────────────────
+  const showToast = (message) => {
+    setToastMessage(message);
+    setTimeout(() => setToastMessage(null), 3000);
+  };
 
-  // Admin Login / Logout
+  // ── Admin Auth ──────────────────────────────────────────────────────────
   const adminLogin = (enteredPin) => {
     const correctPin = settings.adminPin || '1234';
     if (enteredPin === correctPin) {
@@ -106,155 +123,150 @@ export const StoreProvider = ({ children }) => {
     showToast('Logged out of Admin Portal.');
   };
 
-  // Intercept setViewMode to require auth when switching to admin
   const requestAdminView = () => {
-    if (isAdminAuthenticated) {
-      setViewMode('admin');
-    } else {
-      setShowAdminLogin(true);
+    if (isAdminAuthenticated) setViewMode('admin');
+    else setShowAdminLogin(true);
+  };
+
+  // ── Product CRUD (Firestore → all admins see changes instantly) ─────────
+  const addProduct = async (newProd) => {
+    try {
+      const payload = {
+        ...newProd,
+        rating: 5.0,
+        createdAt: new Date().toISOString()
+      };
+      await addDoc(collection(db, 'products'), payload);
+      showToast(`"${newProd.name}" added successfully!`);
+    } catch (err) {
+      console.error('addProduct error:', err);
+      showToast('Error saving product. Please try again.');
     }
   };
 
-  // Toast notification helper
-  const showToast = (message) => {
-    setToastMessage(message);
-    setTimeout(() => {
-      setToastMessage(null);
-    }, 3000);
+  const updateProduct = async (id, updatedFields) => {
+    try {
+      await updateDoc(doc(db, 'products', id), updatedFields);
+      showToast('Product updated successfully.');
+    } catch (err) {
+      console.error('updateProduct error:', err);
+      showToast('Error updating product.');
+    }
   };
 
-  // Product Management (Admin CRUD)
-  const addProduct = (newProd) => {
-    const createdProduct = {
-      ...newProd,
-      id: `prod-${Date.now()}`,
-      rating: 5.0,
-      createdAt: new Date().toISOString()
-    };
-    setProducts(prev => [createdProduct, ...prev]);
-    showToast(`"${createdProduct.name}" added successfully!`);
+  const deleteProduct = async (id) => {
+    try {
+      await deleteDoc(doc(db, 'products', id));
+      setCart(prev => prev.filter(item => item.product.id !== id));
+      showToast('Product deleted.');
+    } catch (err) {
+      console.error('deleteProduct error:', err);
+    }
   };
 
-  const updateProduct = (id, updatedFields) => {
-    setProducts(prev => prev.map(p => p.id === id ? { ...p, ...updatedFields } : p));
-    showToast(`Product updated successfully.`);
+  const toggleStock = async (id) => {
+    const prod = products.find(p => p.id === id);
+    if (!prod) return;
+    const newStock = !prod.inStock;
+    try {
+      await updateDoc(doc(db, 'products', id), { inStock: newStock });
+      showToast(`${prod.name} is now ${newStock ? 'In Stock' : 'Out of Stock'}.`);
+    } catch (err) {
+      console.error('toggleStock error:', err);
+    }
   };
 
-  const deleteProduct = (id) => {
-    setProducts(prev => prev.filter(p => p.id !== id));
-    setCart(prev => prev.filter(item => item.product.id !== id));
-    showToast(`Product deleted.`);
+  // ── Settings (Firestore) ────────────────────────────────────────────────
+  const updateSettings = async (newSettings) => {
+    try {
+      await setDoc(doc(db, 'config', 'settings'), { ...settings, ...newSettings }, { merge: true });
+      showToast('Store settings saved!');
+    } catch (err) {
+      console.error('updateSettings error:', err);
+    }
   };
 
-  const toggleStock = (id) => {
-    setProducts(prev => prev.map(p => {
-      if (p.id === id) {
-        const newStock = !p.inStock;
-        showToast(`${p.name} is now ${newStock ? 'In Stock' : 'Out of Stock'}.`);
-        return { ...p, inStock: newStock };
-      }
-      return p;
-    }));
-  };
-
-  // Settings Management
-  const updateSettings = (newSettings) => {
-    setSettings(prev => ({ ...prev, ...newSettings }));
-    showToast("Store settings saved!");
-  };
-
-  // Category Management
-  const addCategory = (catName) => {
+  // ── Category CRUD (Firestore) ───────────────────────────────────────────
+  const addCategory = async (catName) => {
     if (!catName || categories.includes(catName)) return;
-    setCategories(prev => [...prev, catName]);
-    showToast(`Category "${catName}" added.`);
+    const newList = [...categories, catName];
+    try {
+      await setDoc(doc(db, 'config', 'categories'), { list: newList });
+      showToast(`Category "${catName}" added.`);
+    } catch (err) { console.error(err); }
   };
 
-  const deleteCategory = (catName) => {
-    if (catName === "All") return;
-    setCategories(prev => prev.filter(c => c !== catName));
-    if (activeCategory === catName) setActiveCategory("All");
-    showToast(`Category "${catName}" deleted.`);
+  const deleteCategory = async (catName) => {
+    if (catName === 'All') return;
+    const newList = categories.filter(c => c !== catName);
+    try {
+      await setDoc(doc(db, 'config', 'categories'), { list: newList });
+      if (activeCategory === catName) setActiveCategory('All');
+      showToast(`Category "${catName}" deleted.`);
+    } catch (err) { console.error(err); }
   };
 
-  // Cart Functions
+  // ── Cart (local-only, per device) ───────────────────────────────────────
   const addToCart = (product, size, color, quantity = 1) => {
-    const cartItemId = `${product.id}-${size}-${color.name || color}`;
-    
+    const cartItemId = `${product.id}-${size}-${color?.name || color}`;
     setCart(prev => {
-      const existingIndex = prev.findIndex(item => item.cartItemId === cartItemId);
-      if (existingIndex > -1) {
+      const idx = prev.findIndex(i => i.cartItemId === cartItemId);
+      if (idx > -1) {
         const updated = [...prev];
-        updated[existingIndex].quantity += quantity;
+        updated[idx].quantity += quantity;
         return updated;
-      } else {
-        return [...prev, {
-          cartItemId,
-          product,
-          size: size || (product.sizes && product.sizes[0]) || "Standard",
-          color: color ? (color.name || color) : (product.colors && product.colors[0]?.name) || "Default",
-          quantity
-        }];
       }
+      return [...prev, {
+        cartItemId,
+        product,
+        size: size || product.sizes?.[0] || 'Standard',
+        color: color ? (color.name || color) : (product.colors?.[0]?.name || 'Default'),
+        quantity
+      }];
     });
-
     showToast(`Added ${product.name} to cart`);
   };
 
   const updateCartQuantity = (cartItemId, delta) => {
-    setCart(prev => {
-      return prev.map(item => {
-        if (item.cartItemId === cartItemId) {
-          const newQty = item.quantity + delta;
-          return newQty > 0 ? { ...item, quantity: newQty } : null;
-        }
-        return item;
-      }).filter(Boolean);
-    });
+    setCart(prev =>
+      prev.map(item => {
+        if (item.cartItemId !== cartItemId) return item;
+        const newQty = item.quantity + delta;
+        return newQty > 0 ? { ...item, quantity: newQty } : null;
+      }).filter(Boolean)
+    );
   };
 
   const removeFromCart = (cartItemId) => {
-    setCart(prev => prev.filter(item => item.cartItemId !== cartItemId));
-    showToast("Item removed from cart");
+    setCart(prev => prev.filter(i => i.cartItemId !== cartItemId));
+    showToast('Item removed from cart');
   };
 
-  const clearCart = () => {
-    setCart([]);
-  };
+  const clearCart = () => setCart([]);
 
-  // Wishlist Functions
+  // ── Wishlist (local-only) ───────────────────────────────────────────────
   const toggleWishlist = (productId) => {
     setWishlist(prev => {
       const exists = prev.includes(productId);
-      if (exists) {
-        showToast("Removed from wishlist");
-        return prev.filter(id => id !== productId);
-      } else {
-        showToast("Added to wishlist ❤️");
-        return [...prev, productId];
-      }
+      showToast(exists ? 'Removed from wishlist' : 'Added to wishlist ❤️');
+      return exists ? prev.filter(id => id !== productId) : [...prev, productId];
     });
   };
 
-  // WhatsApp Order Generator
-  const checkoutViaWhatsApp = (customerDetails) => {
+  // ── WhatsApp Checkout ───────────────────────────────────────────────────
+  const checkoutViaWhatsApp = async (customerDetails) => {
     const { name, phone, address, notes } = customerDetails;
-    
-    // Clean phone number format for WhatsApp api
-    const cleanMerchantPhone = settings.whatsappNumber.replace(/[^0-9]/g, '');
+    const cleanPhone = settings.whatsappNumber.replace(/[^0-9]/g, '');
+    const cartTotal = cart.reduce((sum, i) => sum + i.product.price * i.quantity, 0);
 
-    const cartTotal = cart.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
-
-    // Build line items text
-    let itemDetailsText = "";
-    cart.forEach((item, index) => {
-      itemDetailsText += `${index + 1}. *${item.product.name}*\n`;
+    let itemDetailsText = '';
+    cart.forEach((item, idx) => {
+      itemDetailsText += `${idx + 1}. *${item.product.name}*\n`;
       itemDetailsText += `   • Size: ${item.size} | Color: ${item.color}\n`;
       itemDetailsText += `   • Qty: ${item.quantity} x ${settings.currency}${item.product.price.toLocaleString()} = *${settings.currency}${(item.product.price * item.quantity).toLocaleString()}*\n\n`;
     });
 
-    // Build formatted message
-    const orderMsg = 
+    const orderMsg =
 `🛍️ *NEW ORDER - ${settings.storeName.toUpperCase()}*
 ---------------------------------------
 👤 *Customer Name:* ${name}
@@ -268,16 +280,12 @@ ${itemDetailsText}---------------------------------------
 
 Thank you! Please confirm item availability and delivery time.`;
 
-    const encodedMsg = encodeURIComponent(orderMsg);
-    const whatsappUrl = `https://wa.me/${cleanMerchantPhone}?text=${encodedMsg}`;
-
-    // Record order dispatch log in local state
-    const newOrderRecord = {
+    const newOrder = {
       id: `ORD-${Math.floor(1000 + Math.random() * 9000)}`,
       customerName: name,
       customerPhone: phone,
       address,
-      notes: notes || "N/A",
+      notes: notes || 'N/A',
       items: cart.map(i => ({
         id: i.product.id,
         name: i.product.name,
@@ -287,41 +295,34 @@ Thank you! Please confirm item availability and delivery time.`;
         quantity: i.quantity
       })),
       total: cartTotal,
-      status: "Dispatched to WhatsApp",
+      status: 'Dispatched to WhatsApp',
       date: new Date().toISOString()
     };
 
-    setOrders(prev => [newOrderRecord, ...prev]);
+    try {
+      await addDoc(collection(db, 'orders'), newOrder);
+    } catch (err) { console.error('Order save error:', err); }
 
-    // Open WhatsApp URL in new window/tab
-    window.open(whatsappUrl, '_blank');
-
-    // Reset Cart & Close Drawer
+    window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(orderMsg)}`, '_blank');
     clearCart();
     setIsCartOpen(false);
-    showToast("Opening WhatsApp with your order receipt! 🎉");
+    showToast('Opening WhatsApp with your order receipt! 🎉');
   };
 
-  // Filtered & Sorted products computation
+  // ── Filtered & Sorted Products ──────────────────────────────────────────
   const filteredProducts = products.filter(p => {
-    const pCategory = p?.category || "";
-    const pName = p?.name || "";
-    const pDesc = p?.description || "";
-    
-    const matchesCategory = activeCategory === "All" || pCategory.toLowerCase() === activeCategory.toLowerCase();
-    const query = (searchQuery || "").toLowerCase();
-    const matchesSearch = query === "" || 
-      pName.toLowerCase().includes(query) || 
-      pDesc.toLowerCase().includes(query) ||
-      pCategory.toLowerCase().includes(query);
-    return matchesCategory && matchesSearch;
+    const cat = p?.category || '';
+    const name = p?.name || '';
+    const desc = p?.description || '';
+    const matchCat = activeCategory === 'All' || cat.toLowerCase() === activeCategory.toLowerCase();
+    const q = (searchQuery || '').toLowerCase();
+    const matchSearch = !q || name.toLowerCase().includes(q) || desc.toLowerCase().includes(q) || cat.toLowerCase().includes(q);
+    return matchCat && matchSearch;
   }).sort((a, b) => {
-    const priceA = Number(a?.price) || 0;
-    const priceB = Number(b?.price) || 0;
-    if (sortOption === "price-low") return priceA - priceB;
-    if (sortOption === "price-high") return priceB - priceA;
-    if (sortOption === "newest") return new Date(b?.createdAt || 0) - new Date(a?.createdAt || 0);
-    return ((b?.featured ? 1 : 0) - (a?.featured ? 1 : 0));
+    if (sortOption === 'price-low') return (Number(a?.price) || 0) - (Number(b?.price) || 0);
+    if (sortOption === 'price-high') return (Number(b?.price) || 0) - (Number(a?.price) || 0);
+    if (sortOption === 'newest') return new Date(b?.createdAt || 0) - new Date(a?.createdAt || 0);
+    return (b?.featured ? 1 : 0) - (a?.featured ? 1 : 0);
   });
 
   return (
@@ -337,7 +338,7 @@ Thank you! Please confirm item availability and delivery time.`;
       },
       isAdminAuthenticated,
       showAdminLogin, setShowAdminLogin,
-      adminLogin, adminLogout,
+      adminLogin, adminLogout, requestAdminView,
       settings, updateSettings,
       categories, addCategory, deleteCategory,
       products, filteredProducts, addProduct, updateProduct, deleteProduct, toggleStock,
@@ -351,7 +352,8 @@ Thank you! Please confirm item availability and delivery time.`;
       isWishlistOpen, setIsWishlistOpen,
       selectedProductModal, setSelectedProductModal,
       checkoutViaWhatsApp,
-      toastMessage, showToast
+      toastMessage, showToast,
+      isLoading
     }}>
       {children}
     </StoreContext.Provider>

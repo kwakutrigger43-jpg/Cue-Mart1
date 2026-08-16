@@ -69,3 +69,24 @@
 .animate-slide-in-right {
   animation: slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
+
+/* ── Hide scrollbar on horizontal carousels (all browsers) ── */
+.scrollbar-none {
+  scrollbar-width: none;       /* Firefox */
+  -ms-overflow-style: none;    /* IE/Edge */
+  -webkit-overflow-scrolling: touch; /* iOS momentum scroll */
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;               /* Chrome/Safari/Opera */
+}
+
+/* ── Smooth momentum scroll for iOS catalog rows ── */
+.overflow-x-auto {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ── Fix modal viewport on iOS (dvh support) ── */
+@supports (height: 100dvh) {
+  .h-screen { height: 100dvh; }
+  .min-h-screen { min-height: 100dvh; }
+}
