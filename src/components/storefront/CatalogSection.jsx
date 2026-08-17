@@ -2,7 +2,7 @@ import React, { useRef } from 'react';
 import { useStore } from '../../context/StoreContext';
 import {
   Search, X, SlidersHorizontal, ChevronRight,
-  ShoppingBag, Heart, Star, Zap, TrendingUp, Sparkles, Loader2
+  ShoppingBag, Heart, Star, Zap, TrendingUp, Sparkles, Loader2, Filter, ArrowLeft
 } from 'lucide-react';
 
 // ── Emoji mapping for dynamic category icons ────────────────────────────────
@@ -35,7 +35,7 @@ const HorizontalProductCard = ({ product }) => {
 
   return (
     <div
-      className="relative shrink-0 w-36 sm:w-40 rounded-2xl bg-white border border-slate-100 overflow-hidden shadow-sm hover:shadow-md transition-shadow cursor-pointer group"
+      className="relative shrink-0 w-36 sm:w-40 rounded-2xl bg-white border border-slate-100 overflow-hidden shadow-sm hover:shadow-md transition-shadow cursor-pointer group flex flex-col justify-between"
       onClick={() => setSelectedProductModal(product)}
     >
       {/* Image */}
@@ -246,16 +246,29 @@ export const CatalogSection = () => {
     isLoading
   } = useStore();
 
-  const scrollRef = useRef(null);
+  const gridRef = useRef(null);
+
+  const handleSelectCategory = (cat) => {
+    setActiveCategory(cat);
+    // Smooth scroll down to grid view when selecting any specific category
+    if (gridRef.current) {
+      gridRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
+  // Filter deals and top ranking items according to activeCategory if activeCategory !== 'All'
+  const isAll = activeCategory.toLowerCase() === 'all';
 
   // Deals: products with a discount
   const dealProducts = [...products]
     .filter(p => p.inStock && p.originalPrice && Number(p.originalPrice) > Number(p.price))
+    .filter(p => isAll || p.category?.toLowerCase() === activeCategory.toLowerCase())
     .sort((a, b) => (Number(b.originalPrice) - Number(b.price)) - (Number(a.originalPrice) - Number(a.price)));
 
   // Top Ranking: highest rated
   const topRanking = [...products]
     .filter(p => p.inStock && p.rating)
+    .filter(p => isAll || p.category?.toLowerCase() === activeCategory.toLowerCase())
     .sort((a, b) => Number(b.rating) - Number(a.rating))
     .slice(0, 10);
 
@@ -281,25 +294,25 @@ export const CatalogSection = () => {
   return (
     <div id="catalog" className="scroll-mt-20">
 
-      {/* ── Category Tab Bar ────────────────────────────────────────────── */}
-      <div className="sticky top-14 z-30 bg-white border-b border-slate-100 shadow-sm">
+      {/* ── Category Tab Bar (Sticky) ────────────────────────────────────── */}
+      <div className="sticky top-14 z-30 bg-white/95 backdrop-blur-md border-b border-slate-100 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center gap-1 overflow-x-auto scrollbar-none py-2">
+          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-2.5">
             {categories.map(cat => {
               const isActive = activeCategory.toLowerCase() === cat.toLowerCase();
               return (
-                <a
+                <button
                   key={cat}
-                  href="#catalog"
-                  onClick={(e) => { e.preventDefault(); setActiveCategory(cat); }}
-                  className={`shrink-0 px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all ${
+                  onClick={() => handleSelectCategory(cat)}
+                  className={`shrink-0 px-4 py-2 rounded-full text-xs font-extrabold whitespace-nowrap transition-all flex items-center gap-1.5 ${
                     isActive
-                      ? 'bg-orange-600 text-white shadow-sm shadow-orange-600/30'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                      ? 'bg-orange-600 text-white shadow-sm shadow-orange-600/30 scale-105'
+                      : 'text-slate-700 bg-slate-50 hover:bg-slate-100 hover:text-slate-900 border border-slate-200/60'
                   }`}
                 >
-                  {cat}
-                </a>
+                  <span>{getCategoryEmoji(cat)}</span>
+                  <span>{cat}</span>
+                </button>
               );
             })}
           </div>
@@ -307,6 +320,34 @@ export const CatalogSection = () => {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-8">
+
+        {/* ── Active Category Indicator (when a specific category is selected) ── */}
+        {!isAll && (
+          <div className="bg-orange-50 border border-orange-200/70 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fade-in">
+            <div className="flex items-center gap-3">
+              <span className="text-3xl p-2 rounded-2xl bg-white shadow-xs border border-orange-100">
+                {getCategoryEmoji(activeCategory)}
+              </span>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-extrabold text-orange-600 uppercase tracking-widest">Active Category</span>
+                </div>
+                <h2 className="text-xl font-extrabold text-slate-900">{activeCategory}</h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Showing all {filteredProducts.length} {filteredProducts.length === 1 ? 'product' : 'products'} in "{activeCategory}"
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => handleSelectCategory('All')}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white hover:bg-orange-600 text-slate-800 hover:text-white border border-slate-200 text-xs font-bold transition-all shadow-xs shrink-0"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Show All Categories (ALL)</span>
+            </button>
+          </div>
+        )}
 
         {/* ── Search Bar ─────────────────────────────────────────────────── */}
         <div className="relative">
@@ -337,12 +378,12 @@ export const CatalogSection = () => {
               return (
                 <button
                   key={cat}
-                  onClick={() => setActiveCategory(cat)}
+                  onClick={() => handleSelectCategory(cat)}
                   className="flex flex-col items-center gap-2 shrink-0 group"
                 >
                   <div className={`w-16 h-16 rounded-full flex items-center justify-center text-2xl transition-all shadow-sm border-2 ${
                     isActive
-                      ? 'bg-orange-600 border-orange-600 shadow-orange-300 scale-105'
+                      ? 'bg-orange-600 border-orange-600 shadow-orange-300 scale-105 text-white'
                       : 'bg-white border-slate-200 hover:border-orange-400 hover:shadow-md group-hover:scale-105'
                   }`}>
                     {getCategoryEmoji(cat)}
@@ -358,8 +399,8 @@ export const CatalogSection = () => {
           </div>
         </div>
 
-        {/* ── Style Banners ───────────────────────────────────────────────── */}
-        {styleBanners.length > 0 && (
+        {/* ── Style Banners (Show on 'All') ─────────────────────────────────── */}
+        {isAll && styleBanners.length > 0 && (
           <div>
             <SectionHeader
               icon={<Sparkles className="w-4 h-4 text-orange-500" />}
@@ -372,7 +413,7 @@ export const CatalogSection = () => {
                   key={banner.category}
                   category={banner.category}
                   image={banner.image}
-                  onClick={() => setActiveCategory(banner.category)}
+                  onClick={() => handleSelectCategory(banner.category)}
                 />
               ))}
             </div>
@@ -384,9 +425,9 @@ export const CatalogSection = () => {
           <div>
             <SectionHeader
               icon={<Zap className="w-4 h-4 text-amber-500 fill-amber-400" />}
-              title="Super Deals"
+              title={isAll ? "Super Deals" : `Deals in ${activeCategory}`}
               subtitle="Limited time savings"
-              onSeeAll={() => setActiveCategory('All')}
+              onSeeAll={() => handleSelectCategory('All')}
             />
             <div className="flex gap-3 overflow-x-auto scrollbar-none pb-2">
               {dealProducts.slice(0, 8).map(p => (
@@ -401,9 +442,9 @@ export const CatalogSection = () => {
           <div>
             <SectionHeader
               icon={<TrendingUp className="w-4 h-4 text-emerald-500" />}
-              title="Top Ranking Items"
+              title={isAll ? "Top Ranking Items" : `Top Rated in ${activeCategory}`}
               subtitle="Customer favourites"
-              onSeeAll={() => { setSortOption('featured'); setActiveCategory('All'); }}
+              onSeeAll={() => { setSortOption('featured'); handleSelectCategory('All'); }}
             />
             <div className="flex gap-3 overflow-x-auto scrollbar-none pb-2">
               {topRanking.map(p => (
@@ -414,17 +455,17 @@ export const CatalogSection = () => {
         )}
 
         {/* ── Main Product Grid ────────────────────────────────────────────── */}
-        <div>
+        <div ref={gridRef} id="catalog-grid" className="scroll-mt-24">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <div className="w-1 h-5 rounded-full bg-orange-500" />
+              <div className="w-1.5 h-5 rounded-full bg-orange-500" />
               <div>
                 <h2 className="text-base font-extrabold text-slate-900">
-                  {activeCategory === 'All' ? 'All Products' : activeCategory}
+                  {isAll ? 'All Products' : `${activeCategory} Collection`}
                 </h2>
                 <p className="text-[11px] text-slate-400 font-medium">
                   {filteredProducts.length} {filteredProducts.length === 1 ? 'item' : 'items'}
-                  {searchQuery && ` for "${searchQuery}"`}
+                  {searchQuery && ` matching "${searchQuery}"`}
                 </p>
               </div>
             </div>
@@ -465,10 +506,10 @@ export const CatalogSection = () => {
                 </p>
               </div>
               <button
-                onClick={() => { setSearchQuery(''); setActiveCategory('All'); }}
+                onClick={() => { setSearchQuery(''); handleSelectCategory('All'); }}
                 className="px-5 py-2.5 rounded-full bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold transition-colors"
               >
-                Browse All Products
+                Show All Categories (ALL)
               </button>
             </div>
           )}
