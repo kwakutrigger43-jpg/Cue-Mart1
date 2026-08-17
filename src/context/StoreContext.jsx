@@ -254,20 +254,37 @@ export const StoreProvider = ({ children }) => {
   };
 
   // ── WhatsApp Checkout ───────────────────────────────────────────────────
-  const checkoutViaWhatsApp = async (customerDetails) => {
+  const checkoutViaWhatsApp = async (customerDetails, singleItem = null) => {
     const { name, phone, address, notes } = customerDetails;
-    const cleanPhone = settings.whatsappNumber.replace(/[^0-9]/g, '');
-    const cartTotal = cart.reduce((sum, i) => sum + i.product.price * i.quantity, 0);
+    const cleanPhone = (settings.whatsappNumber || '').replace(/[^0-9]/g, '');
+
+    const itemsToOrder = singleItem ? [{
+      id: singleItem.product.id,
+      name: singleItem.product.name,
+      size: singleItem.size,
+      color: singleItem.color,
+      price: singleItem.product.price,
+      quantity: singleItem.quantity
+    }] : cart.map(i => ({
+      id: i.product.id,
+      name: i.product.name,
+      size: i.size,
+      color: i.color,
+      price: i.product.price,
+      quantity: i.quantity
+    }));
+
+    const totalAmount = itemsToOrder.reduce((sum, i) => sum + (Number(i.price) * i.quantity), 0);
 
     let itemDetailsText = '';
-    cart.forEach((item, idx) => {
-      itemDetailsText += `${idx + 1}. *${item.product.name}*\n`;
+    itemsToOrder.forEach((item, idx) => {
+      itemDetailsText += `${idx + 1}. *${item.name}*\n`;
       itemDetailsText += `   • Size: ${item.size} | Color: ${item.color}\n`;
-      itemDetailsText += `   • Qty: ${item.quantity} x ${settings.currency}${item.product.price.toLocaleString()} = *${settings.currency}${(item.product.price * item.quantity).toLocaleString()}*\n\n`;
+      itemDetailsText += `   • Qty: ${item.quantity} x ${settings.currency}${Number(item.price).toLocaleString()} = *${settings.currency}${(Number(item.price) * item.quantity).toLocaleString()}*\n\n`;
     });
 
     const orderMsg =
-`🛍️ *NEW ORDER - ${settings.storeName.toUpperCase()}*
+`🛍️ *NEW ORDER - ${(settings.storeName || 'CUEMART').toUpperCase()}*
 ---------------------------------------
 👤 *Customer Name:* ${name}
 📞 *Customer Phone:* ${phone}
@@ -276,7 +293,7 @@ ${notes ? `📝 *Notes:* ${notes}\n` : ''}--------------------------------------
 📦 *ORDER SUMMARY:*
 
 ${itemDetailsText}---------------------------------------
-💰 *TOTAL AMOUNT:* *${settings.currency}${cartTotal.toLocaleString()}*
+💰 *TOTAL AMOUNT:* *${settings.currency}${totalAmount.toLocaleString()}*
 
 Thank you! Please confirm item availability and delivery time.`;
 
@@ -286,15 +303,8 @@ Thank you! Please confirm item availability and delivery time.`;
       customerPhone: phone,
       address,
       notes: notes || 'N/A',
-      items: cart.map(i => ({
-        id: i.product.id,
-        name: i.product.name,
-        size: i.size,
-        color: i.color,
-        price: i.product.price,
-        quantity: i.quantity
-      })),
-      total: cartTotal,
+      items: itemsToOrder,
+      total: totalAmount,
       status: 'Dispatched to WhatsApp',
       date: new Date().toISOString()
     };
@@ -304,7 +314,7 @@ Thank you! Please confirm item availability and delivery time.`;
     } catch (err) { console.error('Order save error:', err); }
 
     window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(orderMsg)}`, '_blank');
-    clearCart();
+    if (!singleItem) clearCart();
     setIsCartOpen(false);
     showToast('Opening WhatsApp with your order receipt! 🎉');
   };
