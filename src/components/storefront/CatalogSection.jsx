@@ -350,24 +350,35 @@ export const CatalogSection = () => {
         )}
 
         {/* ── Search Bar ─────────────────────────────────────────────────── */}
-        <div className="relative">
+        <div className="relative w-full">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
           <input
             type="text"
             id="catalog-search"
             placeholder="Search products, fashion, accessories..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-11 pr-10 py-3 rounded-2xl bg-white border border-slate-200 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500 placeholder:text-slate-400 shadow-sm transition-all"
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              if (e.target.value.trim() && gridRef.current) {
+                gridRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              }
+            }}
+            className="w-full pl-11 pr-24 py-3 rounded-2xl bg-white border border-slate-200 text-xs sm:text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500 placeholder:text-slate-400 shadow-sm transition-all"
           />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery('')}
-              className="absolute right-3.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-700 rounded-full hover:bg-slate-100"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          )}
+          {searchQuery ? (
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+              <span className="hidden sm:inline text-[10px] font-bold text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full border border-orange-200">
+                {filteredProducts.length} {filteredProducts.length === 1 ? 'match' : 'matches'}
+              </span>
+              <button
+                onClick={() => setSearchQuery('')}
+                className="p-1 text-slate-400 hover:text-slate-700 rounded-full hover:bg-slate-100 transition-colors"
+                aria-label="Clear search"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          ) : null}
         </div>
 
         {/* ── Circle Category Icons ───────────────────────────────────────── */}
