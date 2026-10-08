@@ -13,7 +13,7 @@ export const AdminDashboard = () => {
   const { 
     products, deleteProduct, toggleStock, 
     categories, addCategory, deleteCategory,
-    orders, settings, setViewMode, adminLogout
+    orders, settings, setViewMode, adminLogout, adminUser
   } = useStore();
 
   const [activeTab, setActiveTab] = useState('inventory'); // 'inventory', 'categories', 'orders', 'settings'
@@ -85,9 +85,16 @@ export const AdminDashboard = () => {
 
             <div className="flex items-center gap-3">
               {/* Verified Admin badge */}
-              <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-900/50 border border-emerald-700/40 text-emerald-400 text-[10px] font-bold uppercase tracking-wider">
-                <ShieldCheck className="w-3 h-3" />
-                <span>Admin Verified</span>
+              <div className="hidden sm:flex flex-col items-end">
+                <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-900/50 border border-emerald-700/40 text-emerald-400 text-[10px] font-bold uppercase tracking-wider">
+                  <ShieldCheck className="w-3 h-3" />
+                  <span>Admin Verified</span>
+                </div>
+                {adminUser?.email && (
+                  <span className="text-[11px] text-slate-400 font-mono mt-1 max-w-[200px] truncate" title={adminUser.email}>
+                    {adminUser.email}
+                  </span>
+                )}
               </div>
 
               <button

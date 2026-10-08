@@ -1,23 +1,71 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { db } from '../firebase';
+import { db, auth } from '../firebase';
 import {
   collection, doc, onSnapshot, setDoc, addDoc,
   updateDoc, deleteDoc, query, orderBy
 } from 'firebase/firestore';
+import {
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut,
+  sendPasswordResetEmail,
+  onAuthStateChanged
+} from 'firebase/auth';
 import { initialCategories, initialStoreSettings } from '../data/initialData';
 
 const StoreContext = createContext();
+
+const formatAuthError = (err) => {
+  const code = err?.code || '';
+  switch (code) {
+    case 'auth/invalid-credential':
+    case 'auth/wrong-password':
+    case 'auth/user-not-found':
+      return 'Invalid email or password. Please check your credentials.';
+    case 'auth/invalid-email':
+      return 'Please enter a valid email address.';
+    case 'auth/email-already-in-use':
+      return 'An account already exists with this email address.';
+    case 'auth/weak-password':
+      return 'Password should be at least 6 characters.';
+    case 'auth/too-many-requests':
+      return 'Too many failed login attempts. Please reset your password or try again later.';
+    case 'auth/network-request-failed':
+      return 'Network connection failed. Please check your internet connection.';
+    case 'auth/operation-not-allowed':
+      return 'Email/Password sign-in is disabled in Firebase Console. Please enable it in Firebase Console > Authentication > Sign-in method.';
+    default:
+      return err?.message || 'Authentication error. Please try again.';
+  }
+};
 
 export const StoreProvider = ({ children }) => {
   // Mode state
   const [viewMode, setViewMode] = useState('store');
 
-  // Admin Auth
+  // Admin Auth (Firebase Auth)
+  const [adminUser, setAdminUser] = useState(null);
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
   const [showAdminLogin, setShowAdminLogin] = useState(false);
 
   // Loading state (while Firestore first loads)
   const [isLoading, setIsLoading] = useState(true);
+
+  // ── Firebase Auth State Listener ─────────────────────────────────────────
+  useEffect(() => {
+    const unsubAuth = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        setAdminUser(user);
+        setIsAdminAuthenticated(true);
+      } else {
+        setAdminUser(null);
+        setIsAdminAuthenticated(false);
+        // If user was viewing admin but is now signed out, revert to store
+        setViewMode((prev) => (prev === 'admin' ? 'store' : prev));
+      }
+    });
+    return unsubAuth;
+  }, []);
 
   // ── Firestore-synced state ──────────────────────────────────────────────
   const [settings, setSettings] = useState(initialStoreSettings);
@@ -104,23 +152,58 @@ export const StoreProvider = ({ children }) => {
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  // ── Admin Auth ──────────────────────────────────────────────────────────
-  const adminLogin = (enteredPin) => {
-    const correctPin = settings.adminPin || '1234';
-    if (enteredPin === correctPin) {
+  // ── Admin Auth (Firebase) ────────────────────────────────────────────────
+  const adminLogin = async (email, password) => {
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, email.trim(), password);
+      setAdminUser(userCredential.user);
       setIsAdminAuthenticated(true);
       setShowAdminLogin(false);
       setViewMode('admin');
-      showToast('Welcome back, Admin! 👋');
-      return true;
+      showToast(`Welcome back, ${userCredential.user.email || 'Admin'}! 👋`);
+      return { success: true, user: userCredential.user };
+    } catch (err) {
+      console.error('adminLogin error:', err);
+      return { success: false, error: formatAuthError(err) };
     }
-    return false;
   };
 
-  const adminLogout = () => {
-    setIsAdminAuthenticated(false);
-    setViewMode('store');
-    showToast('Logged out of Admin Portal.');
+  const adminSignup = async (email, password) => {
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, email.trim(), password);
+      setAdminUser(userCredential.user);
+      setIsAdminAuthenticated(true);
+      setShowAdminLogin(false);
+      setViewMode('admin');
+      showToast(`Admin account created successfully! 🎉`);
+      return { success: true, user: userCredential.user };
+    } catch (err) {
+      console.error('adminSignup error:', err);
+      return { success: false, error: formatAuthError(err) };
+    }
+  };
+
+  const adminResetPassword = async (email) => {
+    try {
+      await sendPasswordResetEmail(auth, email.trim());
+      showToast('Password reset link sent! Check your inbox 📬');
+      return { success: true };
+    } catch (err) {
+      console.error('adminResetPassword error:', err);
+      return { success: false, error: formatAuthError(err) };
+    }
+  };
+
+  const adminLogout = async () => {
+    try {
+      await signOut(auth);
+      setAdminUser(null);
+      setIsAdminAuthenticated(false);
+      setViewMode('store');
+      showToast('Logged out of Admin Portal.');
+    } catch (err) {
+      console.error('adminLogout error:', err);
+    }
   };
 
   const requestAdminView = () => {
@@ -346,9 +429,10 @@ Thank you! Please confirm item availability and delivery time.`;
           setViewMode(mode);
         }
       },
+      adminUser,
       isAdminAuthenticated,
       showAdminLogin, setShowAdminLogin,
-      adminLogin, adminLogout, requestAdminView,
+      adminLogin, adminSignup, adminResetPassword, adminLogout, requestAdminView,
       settings, updateSettings,
       categories, addCategory, deleteCategory,
       products, filteredProducts, addProduct, updateProduct, deleteProduct, toggleStock,
