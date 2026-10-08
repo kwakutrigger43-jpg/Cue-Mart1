@@ -2,7 +2,7 @@ import React, { useRef } from 'react';
 import { useStore } from '../../context/StoreContext';
 import {
   Search, X, SlidersHorizontal, ChevronRight,
-  ShoppingBag, Heart, Star, Zap, TrendingUp, Sparkles, Loader2, Filter, ArrowLeft
+  ShoppingBag, Heart, Star, Zap, TrendingUp, Sparkles, Loader2, ArrowLeft
 } from 'lucide-react';
 
 // ── Emoji mapping for dynamic category icons ────────────────────────────────

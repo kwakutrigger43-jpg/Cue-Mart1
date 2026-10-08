@@ -459,7 +459,7 @@ Thank you! Please confirm item availability and delivery time.`;
       adminUser,
       isAdminAuthenticated,
       showAdminLogin, setShowAdminLogin,
-      adminLogin, adminSignup, adminResetPassword, adminLogout, requestAdminView,
+      adminLogin, adminResetPassword, adminLogout, requestAdminView,
       settings, updateSettings,
       categories, addCategory, deleteCategory,
       products, filteredProducts, addProduct, updateProduct, deleteProduct, toggleStock,

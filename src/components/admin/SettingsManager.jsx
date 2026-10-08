@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useStore } from '../../context/StoreContext';
-import { Settings, Save, Phone, Store, Tag, Megaphone, Mail, MapPin, Globe, Lock, ShieldCheck, Navigation, KeyRound, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Settings, Save, Phone, Store, Tag, Megaphone, Mail, MapPin, Globe, ShieldCheck, Navigation, KeyRound, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 
 export const SettingsManager = () => {
   const { settings, updateSettings, adminUser, adminResetPassword, adminLogout } = useStore();
