@@ -33,7 +33,8 @@ const formatAuthError = (err) => {
     case 'auth/network-request-failed':
       return 'Network connection failed. Please check your internet connection.';
     case 'auth/operation-not-allowed':
-      return 'Email/Password sign-in is disabled in Firebase Console. Please enable it in Firebase Console > Authentication > Sign-in method.';
+    case 'auth/configuration-not-found':
+      return 'Firebase Authentication is not activated yet for this project. Please go to Firebase Console > Authentication > Get Started, and enable "Email/Password" provider.';
     default:
       return err?.message || 'Authentication error. Please try again.';
   }
