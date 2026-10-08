@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { useStore } from '../../context/StoreContext';
+import { useStore, AUTHORIZED_ADMIN_EMAIL } from '../../context/StoreContext';
 import { 
   X, Lock, Mail, Eye, EyeOff, AlertCircle, 
-  CheckCircle2, ArrowRight, ArrowLeft, Loader2, ShieldCheck, UserPlus
+  CheckCircle2, ArrowLeft, Loader2, ShieldCheck 
 } from 'lucide-react';
 
 export const AdminLoginModal = () => {
@@ -10,16 +10,14 @@ export const AdminLoginModal = () => {
     showAdminLogin, 
     setShowAdminLogin, 
     adminLogin, 
-    adminSignup, 
     adminResetPassword 
   } = useStore();
 
-  // Mode: 'login' | 'signup' | 'forgot'
+  // Mode: 'login' | 'forgot'
   const [authMode, setAuthMode] = useState('login');
   
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(AUTHORIZED_ADMIN_EMAIL || 'francisarhin650@gmail.com');
   const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   
   const [isLoading, setIsLoading] = useState(false);
@@ -32,8 +30,8 @@ export const AdminLoginModal = () => {
       setErrorMessage('');
       setSuccessMessage('');
       setPassword('');
-      setConfirmPassword('');
       setIsLoading(false);
+      setEmail(AUTHORIZED_ADMIN_EMAIL || 'francisarhin650@gmail.com');
     }
   }, [showAdminLogin, authMode]);
 
@@ -44,7 +42,6 @@ export const AdminLoginModal = () => {
     setErrorMessage('');
     setSuccessMessage('');
     setPassword('');
-    setConfirmPassword('');
     setAuthMode('login');
   };
 
@@ -66,36 +63,10 @@ export const AdminLoginModal = () => {
     }
   };
 
-  const handleSignupSubmit = async (e) => {
-    e.preventDefault();
-    if (!email.trim() || !password) {
-      setErrorMessage('Please enter email and password.');
-      return;
-    }
-    if (password.length < 6) {
-      setErrorMessage('Password must be at least 6 characters long.');
-      return;
-    }
-    if (password !== confirmPassword) {
-      setErrorMessage('Passwords do not match.');
-      return;
-    }
-
-    setIsLoading(true);
-    setErrorMessage('');
-
-    const res = await adminSignup(email, password);
-    setIsLoading(false);
-
-    if (!res.success) {
-      setErrorMessage(res.error);
-    }
-  };
-
   const handleResetSubmit = async (e) => {
     e.preventDefault();
     if (!email.trim()) {
-      setErrorMessage('Please enter your admin email address.');
+      setErrorMessage('Please enter the admin email address.');
       return;
     }
 
@@ -107,7 +78,7 @@ export const AdminLoginModal = () => {
     setIsLoading(false);
 
     if (res.success) {
-      setSuccessMessage(`Password reset link sent to ${email}. Please check your inbox or spam folder.`);
+      setSuccessMessage(`Password reset link sent to ${email}. Please check your inbox.`);
     } else {
       setErrorMessage(res.error);
     }
@@ -141,9 +112,7 @@ export const AdminLoginModal = () => {
           </div>
 
           <div className="mx-auto w-12 h-12 rounded-2xl bg-orange-500/20 border border-orange-500/30 flex items-center justify-center mb-2.5">
-            {authMode === 'signup' ? (
-              <UserPlus className="w-6 h-6 text-orange-400" />
-            ) : authMode === 'forgot' ? (
+            {authMode === 'forgot' ? (
               <Mail className="w-6 h-6 text-orange-400" />
             ) : (
               <Lock className="w-6 h-6 text-orange-400" />
@@ -151,14 +120,12 @@ export const AdminLoginModal = () => {
           </div>
 
           <h2 className="text-white font-extrabold text-xl tracking-tight">
-            {authMode === 'login' && 'Admin Portal Login'}
-            {authMode === 'signup' && 'Create Admin Account'}
-            {authMode === 'forgot' && 'Reset Admin Password'}
+            {authMode === 'login' ? 'Admin Portal Access' : 'Reset Admin Password'}
           </h2>
           <p className="text-slate-400 text-xs mt-1 font-medium">
-            {authMode === 'login' && 'Enter your verified admin credentials to continue'}
-            {authMode === 'signup' && 'Set up a new administrator account for CueMart'}
-            {authMode === 'forgot' && 'Enter your email to receive password reset instructions'}
+            {authMode === 'login'
+              ? 'Authorized store administrator login only'
+              : 'Send recovery instructions to authorized admin email'}
           </p>
         </div>
 
@@ -186,15 +153,14 @@ export const AdminLoginModal = () => {
             <form onSubmit={handleLoginSubmit} className="space-y-4">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  Admin Email Address
+                  Admin Email
                 </label>
                 <div className="relative">
                   <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                   <input
                     type="email"
                     required
-                    autoFocus
-                    placeholder="admin@cuemart.com"
+                    placeholder="francisarhin650@gmail.com"
                     value={email}
                     onChange={(e) => { setEmail(e.target.value); setErrorMessage(''); }}
                     className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
@@ -220,6 +186,7 @@ export const AdminLoginModal = () => {
                   <input
                     type={showPassword ? 'text' : 'password'}
                     required
+                    autoFocus
                     placeholder="••••••••"
                     value={password}
                     onChange={(e) => { setPassword(e.target.value); setErrorMessage(''); }}
@@ -245,143 +212,38 @@ export const AdminLoginModal = () => {
                 {isLoading ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Signing in...</span>
+                    <span>Verifying credentials...</span>
                   </>
                 ) : (
                   <>
                     <ShieldCheck className="w-4 h-4" />
-                    <span>Access Admin Portal</span>
+                    <span>Unlock Admin Console</span>
                   </>
                 )}
               </button>
 
-              {/* Toggle to Signup */}
-              <div className="pt-2 text-center border-t border-slate-100">
-                <p className="text-xs text-slate-500">
-                  New administrator?{' '}
-                  <button
-                    type="button"
-                    onClick={() => { setAuthMode('signup'); setErrorMessage(''); setSuccessMessage(''); }}
-                    className="font-bold text-orange-600 hover:text-orange-700 hover:underline"
-                  >
-                    Create Admin Account
-                  </button>
-                </p>
+              <div className="pt-2 text-center">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 text-slate-500 text-[10px] font-bold uppercase tracking-wider">
+                  <Lock className="w-3 h-3" />
+                  Restricted to Single Authorized Admin
+                </span>
               </div>
             </form>
           )}
 
-          {/* 2. SIGNUP FORM */}
-          {authMode === 'signup' && (
-            <form onSubmit={handleSignupSubmit} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  Admin Email Address
-                </label>
-                <div className="relative">
-                  <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-                  <input
-                    type="email"
-                    required
-                    autoFocus
-                    placeholder="admin@cuemart.com"
-                    value={email}
-                    onChange={(e) => { setEmail(e.target.value); setErrorMessage(''); }}
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  Create Password (min. 6 chars)
-                </label>
-                <div className="relative">
-                  <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    required
-                    placeholder="••••••••"
-                    value={password}
-                    onChange={(e) => { setPassword(e.target.value); setErrorMessage(''); }}
-                    className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"
-                  >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  Confirm Password
-                </label>
-                <div className="relative">
-                  <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    required
-                    placeholder="••••••••"
-                    value={confirmPassword}
-                    onChange={(e) => { setConfirmPassword(e.target.value); setErrorMessage(''); }}
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
-                  />
-                </div>
-              </div>
-
-              {/* Submit Button */}
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="w-full py-3 rounded-xl bg-orange-600 hover:bg-orange-500 text-white font-extrabold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-md shadow-orange-600/20 hover:scale-[1.01] active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer mt-2"
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Creating account...</span>
-                  </>
-                ) : (
-                  <>
-                    <UserPlus className="w-4 h-4" />
-                    <span>Register Admin</span>
-                  </>
-                )}
-              </button>
-
-              {/* Back to Login */}
-              <div className="pt-2 text-center border-t border-slate-100">
-                <p className="text-xs text-slate-500">
-                  Already have an admin account?{' '}
-                  <button
-                    type="button"
-                    onClick={() => { setAuthMode('login'); setErrorMessage(''); setSuccessMessage(''); }}
-                    className="font-bold text-orange-600 hover:text-orange-700 hover:underline"
-                  >
-                    Sign In
-                  </button>
-                </p>
-              </div>
-            </form>
-          )}
-
-          {/* 3. FORGOT PASSWORD FORM */}
+          {/* 2. FORGOT PASSWORD FORM */}
           {authMode === 'forgot' && (
             <form onSubmit={handleResetSubmit} className="space-y-4">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  Admin Email Address
+                  Authorized Admin Email
                 </label>
                 <div className="relative">
                   <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                   <input
                     type="email"
                     required
-                    autoFocus
-                    placeholder="admin@cuemart.com"
+                    placeholder="francisarhin650@gmail.com"
                     value={email}
                     onChange={(e) => { setEmail(e.target.value); setErrorMessage(''); }}
                     className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
@@ -413,7 +275,7 @@ export const AdminLoginModal = () => {
                 <button
                   type="button"
                   onClick={() => { setAuthMode('login'); setErrorMessage(''); setSuccessMessage(''); }}
-                  className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-slate-900"
+                  className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-slate-900 cursor-pointer"
                 >
                   <ArrowLeft className="w-3.5 h-3.5" />
                   <span>Back to Sign In</span>

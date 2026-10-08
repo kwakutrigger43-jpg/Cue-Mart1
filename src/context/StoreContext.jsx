@@ -40,6 +40,8 @@ const formatAuthError = (err) => {
   }
 };
 
+export const AUTHORIZED_ADMIN_EMAIL = 'francisarhin650@gmail.com';
+
 export const StoreProvider = ({ children }) => {
   // Mode state
   const [viewMode, setViewMode] = useState('store');
@@ -55,10 +57,14 @@ export const StoreProvider = ({ children }) => {
   // ── Firebase Auth State Listener ─────────────────────────────────────────
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, (user) => {
-      if (user) {
+      if (user && user.email?.toLowerCase() === AUTHORIZED_ADMIN_EMAIL.toLowerCase()) {
         setAdminUser(user);
         setIsAdminAuthenticated(true);
       } else {
+        if (user) {
+          // If any other account is signed in, sign out immediately
+          signOut(auth).catch(console.error);
+        }
         setAdminUser(null);
         setIsAdminAuthenticated(false);
         // If user was viewing admin but is now signed out, revert to store
@@ -155,38 +161,58 @@ export const StoreProvider = ({ children }) => {
 
   // ── Admin Auth (Firebase) ────────────────────────────────────────────────
   const adminLogin = async (email, password) => {
+    const trimmedEmail = email.trim().toLowerCase();
+    
+    // Strict Admin Email Enforcement
+    if (trimmedEmail !== AUTHORIZED_ADMIN_EMAIL.toLowerCase()) {
+      return { 
+        success: false, 
+        error: 'Access denied. This email is not authorized to access the admin portal.' 
+      };
+    }
+
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, email.trim(), password);
+      // 1. Attempt regular sign in
+      const userCredential = await signInWithEmailAndPassword(auth, trimmedEmail, password);
       setAdminUser(userCredential.user);
       setIsAdminAuthenticated(true);
       setShowAdminLogin(false);
       setViewMode('admin');
-      showToast(`Welcome back, ${userCredential.user.email || 'Admin'}! 👋`);
+      showToast(`Welcome, Administrator! 👋`);
       return { success: true, user: userCredential.user };
     } catch (err) {
+      // 2. If user doesn't exist yet in Firebase, auto-create the official admin account
+      if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential') {
+        try {
+          const createCredential = await createUserWithEmailAndPassword(auth, trimmedEmail, password);
+          setAdminUser(createCredential.user);
+          setIsAdminAuthenticated(true);
+          setShowAdminLogin(false);
+          setViewMode('admin');
+          showToast(`Admin account initialized successfully! 👋`);
+          return { success: true, user: createCredential.user };
+        } catch (createErr) {
+          // If creation fails (e.g. invalid password for already existing user), show original error
+          console.error('adminLogin/provisioning error:', createErr);
+          return { success: false, error: formatAuthError(err) };
+        }
+      }
       console.error('adminLogin error:', err);
       return { success: false, error: formatAuthError(err) };
     }
   };
 
-  const adminSignup = async (email, password) => {
-    try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email.trim(), password);
-      setAdminUser(userCredential.user);
-      setIsAdminAuthenticated(true);
-      setShowAdminLogin(false);
-      setViewMode('admin');
-      showToast(`Admin account created successfully! 🎉`);
-      return { success: true, user: userCredential.user };
-    } catch (err) {
-      console.error('adminSignup error:', err);
-      return { success: false, error: formatAuthError(err) };
-    }
-  };
-
   const adminResetPassword = async (email) => {
+    const trimmedEmail = (email || AUTHORIZED_ADMIN_EMAIL).trim().toLowerCase();
+    if (trimmedEmail !== AUTHORIZED_ADMIN_EMAIL.toLowerCase()) {
+      return { 
+        success: false, 
+        error: 'Password reset is only available for the authorized admin email.' 
+      };
+    }
+
     try {
-      await sendPasswordResetEmail(auth, email.trim());
+      await sendPasswordResetEmail(auth, trimmedEmail);
       showToast('Password reset link sent! Check your inbox 📬');
       return { success: true };
     } catch (err) {
